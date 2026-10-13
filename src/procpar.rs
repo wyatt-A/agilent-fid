@@ -53,7 +53,7 @@ impl SubType {
 }
 
 #[derive(Debug)]
-struct ProcParField {
+pub struct ProcParField {
     pub sub_type: SubType,
     pub basic_type: BasicType,
     pub name: String,
