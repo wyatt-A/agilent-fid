@@ -61,7 +61,7 @@ pub struct BlockStatus {
 }
 
 #[derive(Debug)]
-struct BlockHeader {
+pub struct BlockHeader {
     pub scale: i16,
     pub status: BlockStatus,
     pub index: i16,
