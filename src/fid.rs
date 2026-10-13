@@ -283,7 +283,7 @@ impl AgilentFidHeader {
     //     Ok(())
     // }
 
-    fn read_block(&self, block_idx: usize) -> Result<(Vec<u8>, BlockHeader), AgilentFidError> {
+    pub fn read_block(&self, block_idx: usize) -> Result<(Vec<u8>, BlockHeader), AgilentFidError> {
         if block_idx >= self.file_header.n_blocks {
             Err(AgilentFidError::BlockIndexOutOfRange)?
         }
