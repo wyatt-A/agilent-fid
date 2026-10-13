@@ -1,7 +1,6 @@
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use headfile::common::{AcqHeadfileParams, DWHeadfileParams};
 use indexmap::IndexMap;
 use itertools::Itertools;
 use regex::Regex;
@@ -55,11 +54,11 @@ impl SubType {
 
 #[derive(Debug)]
 struct ProcParField {
-    sub_type: SubType,
-    basic_type: BasicType,
-    name: String,
-    n_elements: usize,
-    data: Vec<ProcparData>,
+    pub sub_type: SubType,
+    pub basic_type: BasicType,
+    pub name: String,
+    pub n_elements: usize,
+    pub data: Vec<ProcparData>,
 }
 
 #[derive(Debug)]
@@ -86,7 +85,7 @@ impl ProcparData {
 }
 
 pub struct ProcPar {
-    fields: IndexMap<String, ProcParField>,
+    pub fields: IndexMap<String, ProcParField>,
 }
 
 impl ProcPar {
@@ -181,109 +180,6 @@ impl ProcPar {
             }
         }
         h
-    }
-
-    pub fn meta_data(&self,vol_index:usize) -> Result<IndexMap<String,String>,AgilentFidError> {
-        let mut hf_params = self.to_hash();
-        let fov = self.field_of_view_mm()?;
-        let n_echos = self.n_echoes()? as i32;
-        let te_ms = self
-            .fields
-            .get("te")
-            .ok_or(AgilentFidError::ProcparFieldError("te".to_string()))?
-            .data[0]
-            .get_numeric()? as f32
-            * 1000.0;
-        let tr_us = self
-            .fields
-            .get("tr")
-            .ok_or(AgilentFidError::ProcparFieldError("tr".to_string()))?
-            .data[0]
-            .get_numeric()? as f32
-            * 1000000.0;
-        let alpha = self
-            .fields
-            .get("flip1")
-            .ok_or(AgilentFidError::ProcparFieldError("flip1".to_string()))?
-            .data[0]
-            .get_numeric()? as f32;
-        let bw = self
-            .fields
-            .get("sw")
-            .ok_or(AgilentFidError::ProcparFieldError("sw".to_string()))?
-            .data[0]
-            .get_numeric()? as f32
-            / 2.0;
-        let s_psdname = self
-            .fields
-            .get("seqfil")
-            .ok_or(AgilentFidError::ProcparFieldError("seqfil".to_string()))?
-            .data[0]
-            .get_string();
-
-        let headfile_params = AcqHeadfileParams {
-            dim_x: self.n_read()?,
-            dim_y: self.n_phase1()?,
-            dim_z: self.n_phase2(),
-            fovx_mm: fov[0],
-            fovy_mm: fov[1],
-            fovz_mm: fov[2],
-            te_ms,
-            tr_us,
-            alpha,
-            bw,
-            n_echos: n_echos as usize,
-            s_psdname,
-        };
-
-        hf_params.extend(headfile_params.to_hash());
-
-        // add dti fields if a max_bval exists
-        if self.fields.get("max_bval").is_some() {
-            if let Some(field) = self.fields.get("bvalue") {
-                let vol_bvalue = field.data[vol_index].get_numeric()? as f32;
-                let diffusion_read = self
-                    .fields
-                    .get("dro")
-                    .ok_or(AgilentFidError::ProcparFieldError("dro".to_string()))?
-                    .data
-                    .get(vol_index)
-                    .ok_or(AgilentFidError::ProcparFieldIndexError("dro".to_string()))?
-                    .get_numeric()?;
-                let diffusion_phase = self
-                    .fields
-                    .get("dpe")
-                    .ok_or(AgilentFidError::ProcparFieldError("dpe".to_string()))?
-                    .data
-                    .get(vol_index)
-                    .ok_or(AgilentFidError::ProcparFieldIndexError("dpe".to_string()))?
-                    .get_numeric()?;
-                let diffusion_slice = self
-                    .fields
-                    .get("dsl")
-                    .ok_or(AgilentFidError::ProcparFieldError("dsl".to_string()))?
-                    .data
-                    .get(vol_index)
-                    .ok_or(AgilentFidError::ProcparFieldIndexError("dsl".to_string()))?
-                    .get_numeric()?;
-                let mut mag =
-                    (diffusion_read.powi(2) + diffusion_phase.powi(2) + diffusion_slice.powi(2))
-                        .sqrt() as f32;
-                if mag == 0.0 {
-                    mag = 1.0;
-                }
-                let dw_headfile = DWHeadfileParams {
-                    bvalue: vol_bvalue,
-                    bval_dir: [
-                        diffusion_read as f32 / mag,
-                        diffusion_phase as f32 / mag,
-                        diffusion_slice as f32 / mag,
-                    ],
-                };
-                hf_params.extend(dw_headfile.to_hash());
-            }
-        }
-        Ok(hf_params)
     }
 
     fn field_of_view_mm(&self) -> Result<[f32; 3], AgilentFidError> {
