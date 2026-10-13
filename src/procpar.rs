@@ -165,7 +165,7 @@ impl ProcPar {
         Ok(Self { fields: h })
     }
 
-    fn to_hash(&self) -> IndexMap<String, String> {
+    pub fn to_hash(&self) -> IndexMap<String, String> {
         let mut h = IndexMap::<String, String>::new();
         for (key, val) in self.fields.iter() {
             let field_name = format!("z_Agilent_{}", key);
@@ -182,7 +182,7 @@ impl ProcPar {
         h
     }
 
-    fn field_of_view_mm(&self) -> Result<[f32; 3], AgilentFidError> {
+    pub fn field_of_view_mm(&self) -> Result<[f32; 3], AgilentFidError> {
         let x = self
             .fields
             .get("lro")
@@ -207,14 +207,14 @@ impl ProcPar {
         Ok([x, y, z])
     }
 
-    fn matrix_size(&self) -> Result<[usize; 3], AgilentFidError> {
+    pub fn matrix_size(&self) -> Result<[usize; 3], AgilentFidError> {
         let read = self.n_read()?;
         let v1 = self.n_phase1()?;
         let v2 = self.n_phase2();
         Ok([read, v1, v2])
     }
 
-    fn n_views(&self) -> Result<usize, AgilentFidError> {
+    pub fn n_views(&self) -> Result<usize, AgilentFidError> {
         let f = self.fields.get("nf").expect("field to exist");
         if let ProcparData::Real(n_views) = f.data[0] {
             Ok(n_views as usize)
@@ -223,7 +223,7 @@ impl ProcPar {
         }
     }
 
-    fn cs_table_path(&self) -> Result<PathBuf, AgilentFidError> {
+    pub fn cs_table_path(&self) -> Result<PathBuf, AgilentFidError> {
         let tab = self
             .fields
             .get("petableCS")
@@ -236,7 +236,7 @@ impl ProcPar {
     }
 
     /// number of complex samples per trace
-    fn n_read(&self) -> Result<usize, AgilentFidError> {
+    pub fn n_read(&self) -> Result<usize, AgilentFidError> {
         let f = self.fields.get("np").expect("field to exist");
         if let ProcparData::Real(n_points) = f.data[0] {
             Ok(n_points as usize / 2)
@@ -245,7 +245,7 @@ impl ProcPar {
         }
     }
 
-    fn n_phase1(&self) -> Result<usize, AgilentFidError> {
+    pub fn n_phase1(&self) -> Result<usize, AgilentFidError> {
         let f = self.fields.get("nv").expect("field to exist");
         if let ProcparData::Real(n_views) = f.data[0] {
             Ok(n_views as usize)
@@ -254,7 +254,7 @@ impl ProcPar {
         }
     }
 
-    fn n_phase2(&self) -> usize {
+    pub fn n_phase2(&self) -> usize {
         let f = self.fields.get("nv2").expect("field to exist");
         if let ProcparData::Real(n_views) = f.data[0] {
             n_views as usize
@@ -262,8 +262,8 @@ impl ProcPar {
             1
         }
     }
-    
-    fn convert_cs_table(&self, output_file: impl AsRef<Path>) -> Result<(), AgilentFidError> {
+
+    pub fn convert_cs_table(&self, output_file: impl AsRef<Path>) -> Result<(), AgilentFidError> {
         let stream_tab = self.cs_stream()?;
         let mut s = stream_tab.iter().map(|val| val.to_string()).join("\n");
         s.push('\n');
@@ -272,7 +272,7 @@ impl ProcPar {
         Ok(())
     }
 
-    fn cs_stream(&self) -> Result<Vec<i32>, AgilentFidError> {
+    pub fn cs_stream(&self) -> Result<Vec<i32>, AgilentFidError> {
         let tab = self.cs_table_path()?;
         if !tab.exists() {
             Err(AgilentFidError::CSTableNotFound)?
@@ -296,7 +296,7 @@ impl ProcPar {
         Ok(stream_tab)
     }
 
-    fn copy_cs_table(&self, output_file: &Path) -> Result<(), AgilentFidError> {
+    pub fn copy_cs_table(&self, output_file: &Path) -> Result<(), AgilentFidError> {
         let tab = self.cs_table_path()?;
         if !tab.exists() {
             Err(AgilentFidError::CSTableNotFound)?
@@ -306,7 +306,7 @@ impl ProcPar {
         Ok(())
     }
 
-    fn n_echoes(&self) -> Result<usize, AgilentFidError> {
+    pub fn n_echoes(&self) -> Result<usize, AgilentFidError> {
         let f = self
             .fields
             .get("ne")
