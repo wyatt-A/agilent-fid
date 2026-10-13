@@ -7,7 +7,7 @@ use regex::Regex;
 use crate::AgilentFidError;
 
 #[derive(Debug)]
-enum BasicType {
+pub enum BasicType {
     Undefined,
     Real,
     String,
@@ -25,7 +25,7 @@ impl BasicType {
 }
 
 #[derive(Debug)]
-enum SubType {
+pub enum SubType {
     Undefined,
     Real,
     String,
@@ -62,7 +62,7 @@ struct ProcParField {
 }
 
 #[derive(Debug)]
-enum ProcparData {
+pub enum ProcparData {
     String(String),
     Real(f64),
 }
