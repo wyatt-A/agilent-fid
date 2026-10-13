@@ -8,76 +8,76 @@ use serde::{Deserialize, Serialize};
 use crate::{AgilentFidError, FILE_HEADER_SIZE_BYTES};
 
 #[derive(Debug, Serialize, Deserialize)]
-struct FileHeader {
-    n_blocks: usize,
-    n_traces: usize,
-    n_points: usize,
-    bytes_per_element: usize,
-    bytes_per_trace: usize,
-    bytes_per_block: usize,
-    version_id: usize,
-    acq_status: AcqStatus,
-    n_block_headers_per_block: usize,
+pub struct FileHeader {
+    pub n_blocks: usize,
+    pub n_traces: usize,
+    pub n_points: usize,
+    pub bytes_per_element: usize,
+    pub bytes_per_trace: usize,
+    pub bytes_per_block: usize,
+    pub version_id: usize,
+    pub acq_status: AcqStatus,
+    pub n_block_headers_per_block: usize,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct AcqStatus {
-    has_data: bool,
-    is_spectrum: bool,
-    is_int32: bool,
-    is_float32: bool,
-    s_complex: bool,
-    s_hypercomplex: bool,
-    unused6: bool,
-    s_acqpar: bool,
-    s_secnd: bool,
-    s_transf: bool,
-    s_np: bool,
-    unused10: bool,
-    s_nf: bool,
-    s_ni: bool,
-    s_ni2: bool,
-    unused15: bool,
+pub struct AcqStatus {
+    pub has_data: bool,
+    pub is_spectrum: bool,
+    pub is_int32: bool,
+    pub is_float32: bool,
+    pub s_complex: bool,
+    pub s_hypercomplex: bool,
+    pub unused6: bool,
+    pub s_acqpar: bool,
+    pub s_secnd: bool,
+    pub s_transf: bool,
+    pub s_np: bool,
+    pub unused10: bool,
+    pub s_nf: bool,
+    pub s_ni: bool,
+    pub s_ni2: bool,
+    pub unused15: bool,
 }
 
 #[derive(Debug)]
-struct BlockStatus {
-    has_data: bool,
-    is_spectrum: bool,
-    is_int32: bool,
-    is_float32: bool,
-    s_complex: bool,
-    s_hypercomplex: bool,
-    unused6: bool,
-    more_blocks: bool,
-    np_cmplx: bool,
-    nf_cmplx: bool,
-    ni_cmplx: bool,
-    ni2_cmplx: bool,
-    unused12: bool,
-    unused13: bool,
-    unused14: bool,
-    unused15: bool,
+pub struct BlockStatus {
+    pub has_data: bool,
+    pub is_spectrum: bool,
+    pub is_int32: bool,
+    pub is_float32: bool,
+    pub s_complex: bool,
+    pub s_hypercomplex: bool,
+    pub unused6: bool,
+    pub more_blocks: bool,
+    pub np_cmplx: bool,
+    pub nf_cmplx: bool,
+    pub ni_cmplx: bool,
+    pub ni2_cmplx: bool,
+    pub unused12: bool,
+    pub unused13: bool,
+    pub unused14: bool,
+    pub unused15: bool,
 }
 
 #[derive(Debug)]
 struct BlockHeader {
-    scale: i16,
-    status: BlockStatus,
-    index: i16,
-    mode: i16,
-    ct_count: i32,
-    lpval: f32,
-    rpval: f32,
-    lvl: f32,
-    tlt: f32,
+    pub scale: i16,
+    pub status: BlockStatus,
+    pub index: i16,
+    pub mode: i16,
+    pub ct_count: i32,
+    pub lpval: f32,
+    pub rpval: f32,
+    pub lvl: f32,
+    pub tlt: f32,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AgilentFidHeader {
-    path: PathBuf,
-    file_header: FileHeader,
-    expected_file_size: usize,
+    pub path: PathBuf,
+    pub file_header: FileHeader,
+    pub expected_file_size: usize,
 }
 
 pub struct AgilentSubFid {
