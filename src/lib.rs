@@ -2,8 +2,8 @@ use std::io;
 use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
-mod procpar;
-mod fid;
+pub mod procpar;
+pub mod fid;
 
 const FILE_HEADER_SIZE_BYTES: usize = 32;
 
