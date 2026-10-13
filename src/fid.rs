@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::Read;
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use byteorder::{BigEndian, ByteOrder, ReadBytesExt};
 use num_complex::Complex32;
@@ -75,6 +75,7 @@ struct BlockHeader {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AgilentFidHeader {
+    path: PathBuf,
     file_header: FileHeader,
     expected_file_size: usize,
 }
@@ -87,7 +88,7 @@ impl AgilentFidHeader {
 
     pub fn open(fid_file: impl AsRef<Path>) -> Result<Self, AgilentFidError> {
 
-        let mut f = File::open(fid_file).map_err(|_| AgilentFidError::FidFileNotFound)?;
+        let mut f = File::open(&fid_file).map_err(|_| AgilentFidError::FidFileNotFound)?;
 
         let n_blocks = f.read_i32::<BigEndian>().unwrap() as usize;
         let n_traces = f.read_i32::<BigEndian>().unwrap() as usize;
@@ -135,6 +136,7 @@ impl AgilentFidHeader {
         };
 
         Ok(Self {
+            path: fid_file.as_ref().to_path_buf(),
             file_header,
             expected_file_size: FILE_HEADER_SIZE_BYTES + n_blocks * bytes_per_block,
         })
@@ -193,117 +195,6 @@ impl AgilentFidHeader {
         Ok(AgilentSubFid { bytes })
     }
 
-
-
-    pub fn fid_prep(
-        &self,
-        out_dir: &Path,
-        vol_index: usize,
-        total_vols: usize,
-        multi_echo_mode: bool,
-        dont_convert_cs_table: bool,
-        view_acceleration: usize,
-        dummy_excitations: usize,
-    ) -> Result<PathBuf, AgilentFidError> {
-        let m_number = civm_rust_utils::m_number(vol_index, total_vols);
-        let out_dir = out_dir.join(&m_number);
-        if !out_dir.exists() {
-            create_dir_all(&out_dir).map_err(|_| {
-                AgilentFidError::UnableToCreateDir(out_dir.to_string_lossy().to_string())
-            })?;
-        }
-        std::fs::copy(&self.procpar_file, &out_dir.join("procpar"))
-            .map_err(|_| AgilentFidError::ProcparNotFound)?;
-        let out_fid = out_dir.join(&m_number).with_extension("fid");
-        let out_cs_table = out_dir.join("cs_table");
-        let out_meta = out_dir.join("meta.txt");
-        let rtk = out_dir.join(RAW_TO_KSPACE_FILENAME).with_extension("json");
-        let ac_file = out_dir.join(&m_number);
-        let p = ProcPar::open(&self.procpar_file);
-
-        // cs table is either a binary mask, or a stream table. We want a stream table
-        if dont_convert_cs_table {
-            p.copy_cs_table(&out_cs_table)?;
-        } else {
-            p.convert_cs_table(&out_cs_table)?;
-        }
-
-        let cs_tab = CSTable::open(&out_cs_table);
-        let view_coords = cs_tab.coordinate_pairs_i16();
-
-        self.write_raw_to_kspace_params(
-            &rtk,
-            total_vols,
-            multi_echo_mode,
-            view_acceleration,
-            dummy_excitations,
-            view_coords,
-        )?;
-        p.write_meta_data(&out_meta, vol_index)?;
-        self.write_sub_fid(&out_fid, vol_index, total_vols, multi_echo_mode)?;
-        civm_rust_utils::write_to_file(
-            &ac_file,
-            Some("ac"),
-            &format!("creation_date={}", civm_rust_utils::time_stamp()),
-        );
-        Ok(out_dir)
-    }
-
-    fn write_raw_to_kspace_params(
-        &self,
-        output_file: &Path,
-        total_vols: usize,
-        multi_echo_mode: bool,
-        view_acceleration: usize,
-        dummy_excitations: usize,
-        view_coords: Vec<[i16; 2]>,
-    ) -> Result<(), AgilentFidError> {
-        let p = ProcPar::open(&self.procpar_file);
-        let n_read = self.file_header.n_points / 2;
-
-        let encoding_method =
-            PhaseEncodingMethod::new(dummy_excitations, view_acceleration, &[0, 0], view_coords);
-
-        let rtk = if multi_echo_mode {
-            let n_views = self.file_header.n_traces / total_vols;
-            RawToKspaceParams {
-                dimension_order: DimensionOrder::from_vec(&[
-                    DimensionLabel::Samples(n_read),
-                    DimensionLabel::Views(n_views),
-                ]),
-                encoding_method,
-                n_objects: 1,
-                image_size: p.matrix_size()?,
-            }
-        } else {
-            let n_views = self.file_header.n_traces;
-            RawToKspaceParams {
-                dimension_order: DimensionOrder::from_vec(&[
-                    DimensionLabel::Samples(n_read),
-                    DimensionLabel::Views(n_views),
-                ]),
-                encoding_method,
-                n_objects: 1,
-                image_size: p.matrix_size()?,
-            }
-        };
-
-        rtk.to_file(output_file);
-        Ok(())
-    }
-
-    pub fn dump_to_cfl(
-        &self,
-        vol_index: usize,
-        n_total_vols: usize,
-        multi_echo_mode: bool,
-    ) -> Result<Cfl, AgilentFidError> {
-        let sf = self.extract_sub_fid(vol_index, n_total_vols, multi_echo_mode)?;
-        let stream = sf.complex_stream();
-        let array = Array1::from_shape_vec((stream.len()).f(), stream).unwrap();
-        Ok(Cfl::from_array(array.into_dyn()))
-    }
-
     fn extract_sub_fid(
         &self,
         vol_index: usize,
@@ -344,60 +235,60 @@ impl AgilentFidHeader {
         Ok(AgilentSubFid { bytes })
     }
 
-    fn write_sub_fid(
-        &self,
-        filename: &Path,
-        vol_index: usize,
-        n_totoal_vols: usize,
-        multi_echo_mode: bool,
-    ) -> Result<(), AgilentFidError> {
-        if multi_echo_mode {
-            let block_index = 0;
-            let (bytes, header) = self.read_block(block_index)?;
-            if !header.status.is_float32 {
-                Err(AgilentFidError::Int32NotSupported)?
-            }
-
-            let view_size = self.file_header.bytes_per_trace;
-            let views: Vec<&[u8]> = bytes.chunks_exact(view_size).collect();
-            let n_views_per_object = views.len() / n_totoal_vols;
-
-            let mut f = File::create(filename).map_err(|_| {
-                AgilentFidError::UnableToCreateFile(filename.to_string_lossy().to_string())
-            })?;
-            for i in 0..n_views_per_object {
-                let view_idx = n_totoal_vols * i + vol_index;
-                let byte_slice = views
-                    .get(view_idx)
-                    .ok_or(AgilentFidError::CannotFillBlockBuffer)?;
-                f.write_all(*byte_slice).map_err(|_| {
-                    AgilentFidError::UnableToCreateFile(filename.to_string_lossy().to_string())
-                })?;
-            }
-        } else {
-            let block_index = vol_index;
-            let (bytes, header) = self.read_block(block_index)?;
-            if header.status.is_float32 {
-                let mut f = File::create(filename).map_err(|_| {
-                    AgilentFidError::UnableToCreateFile(filename.to_string_lossy().to_string())
-                })?;
-                f.write_all(&bytes).map_err(|_| {
-                    AgilentFidError::UnableToCreateFile(filename.to_string_lossy().to_string())
-                })?;
-            } else {
-                Err(AgilentFidError::Int32NotSupported)?
-            }
-        }
-
-        Ok(())
-    }
+    // fn write_sub_fid(
+    //     &self,
+    //     filename: &Path,
+    //     vol_index: usize,
+    //     n_totoal_vols: usize,
+    //     multi_echo_mode: bool,
+    // ) -> Result<(), AgilentFidError> {
+    //     if multi_echo_mode {
+    //         let block_index = 0;
+    //         let (bytes, header) = self.read_block(block_index)?;
+    //         if !header.status.is_float32 {
+    //             Err(AgilentFidError::Int32NotSupported)?
+    //         }
+    //
+    //         let view_size = self.file_header.bytes_per_trace;
+    //         let views: Vec<&[u8]> = bytes.chunks_exact(view_size).collect();
+    //         let n_views_per_object = views.len() / n_totoal_vols;
+    //
+    //         let mut f = File::create(filename).map_err(|_| {
+    //             AgilentFidError::UnableToCreateFile(filename.to_string_lossy().to_string())
+    //         })?;
+    //         for i in 0..n_views_per_object {
+    //             let view_idx = n_totoal_vols * i + vol_index;
+    //             let byte_slice = views
+    //                 .get(view_idx)
+    //                 .ok_or(AgilentFidError::CannotFillBlockBuffer)?;
+    //             f.write_all(*byte_slice).map_err(|_| {
+    //                 AgilentFidError::UnableToCreateFile(filename.to_string_lossy().to_string())
+    //             })?;
+    //         }
+    //     } else {
+    //         let block_index = vol_index;
+    //         let (bytes, header) = self.read_block(block_index)?;
+    //         if header.status.is_float32 {
+    //             let mut f = File::create(filename).map_err(|_| {
+    //                 AgilentFidError::UnableToCreateFile(filename.to_string_lossy().to_string())
+    //             })?;
+    //             f.write_all(&bytes).map_err(|_| {
+    //                 AgilentFidError::UnableToCreateFile(filename.to_string_lossy().to_string())
+    //             })?;
+    //         } else {
+    //             Err(AgilentFidError::Int32NotSupported)?
+    //         }
+    //     }
+    //
+    //     Ok(())
+    // }
 
     fn read_block(&self, block_idx: usize) -> Result<(Vec<u8>, BlockHeader), AgilentFidError> {
         if block_idx >= self.file_header.n_blocks {
             Err(AgilentFidError::BlockIndexOutOfRange)?
         }
 
-        let mut f = File::open(&self.file_path).expect("file to exist");
+        let mut f = File::open(&self.path).expect("file to exist");
 
         // this includes the block header
         let total_bytes_per_block = self.file_header.bytes_per_block;
@@ -451,7 +342,7 @@ impl AgilentFidHeader {
         };
 
         if !block_header.status.has_data {
-            Err(AgilentFidError::DataBlockNotReady(self.file_path.clone()))?
+            Err(AgilentFidError::DataBlockNotReady(self.path.clone()))?
         }
 
         let mut block_buff: Vec<u8> = vec![0; data_bytes_per_block];
